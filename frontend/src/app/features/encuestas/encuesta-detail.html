@@ -21,10 +21,49 @@
       <div><dt>Respuesta única</dt><dd>{{ enc.respuestaUnica ? 'Sí' : 'No' }}</dd></div>
       <div><dt>Responsable</dt><dd class="mono">{{ enc.creadorId }}</dd></div>
       <div><dt>Creada</dt><dd>{{ enc.creadaEn | date: 'medium' }}</dd></div>
-      @if (enc.token) {
-        <div><dt>Enlace público</dt><dd class="mono">/e/{{ enc.token }}</dd></div>
-      }
     </dl>
+  </section>
+
+  <section class="card">
+    <h2>Publicación</h2>
+
+    @if (enc.estado === 'Borrador') {
+      @if (enc.preguntas.length === 0) {
+        <p class="muted">Agrega al menos una pregunta para poder publicar la encuesta.</p>
+      } @else {
+        <form [formGroup]="publishForm" (ngSubmit)="publish()" novalidate>
+          <label for="fechaLimite">Fecha límite</label>
+          <input id="fechaLimite" type="datetime-local" formControlName="fechaLimite" />
+          @if (publishForm.controls.fechaLimite.touched && publishForm.controls.fechaLimite.invalid) {
+            <p class="field-error" role="alert">La fecha límite es obligatoria</p>
+          }
+          <label class="check"><input type="checkbox" formControlName="esAnonima" /> Encuesta anónima</label>
+          <label class="check"><input type="checkbox" formControlName="respuestaUnica" /> Una respuesta por participante</label>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" [disabled]="publishing()">
+              {{ publishing() ? 'Publicando…' : 'Publicar encuesta' }}
+            </button>
+          </div>
+        </form>
+      }
+    } @else if (enc.estado === 'Publicada') {
+      @if (publicLink(); as link) {
+        <label for="link">Enlace para compartir</label>
+        <div class="row">
+          <input id="link" type="text" class="grow mono" readonly [value]="link" />
+          <button type="button" class="btn" (click)="copyLink()">{{ copied() ? 'Copiado' : 'Copiar' }}</button>
+          <a class="btn" [href]="link" target="_blank" rel="noopener">Abrir</a>
+        </div>
+      }
+      <div class="row">
+        <button type="button" class="btn btn-danger" (click)="close()" [disabled]="closing()">
+          {{ closing() ? 'Cerrando…' : 'Cerrar encuesta' }}
+        </button>
+      </div>
+    } @else {
+      <p class="muted">Encuesta cerrada: ya no acepta respuestas y no puede reabrirse.</p>
+    }
+    <app-error-alert [error]="stateError()" />
   </section>
 
   <section class="card">

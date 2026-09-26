@@ -4,7 +4,7 @@
 |-------|-------|
 | Fecha | 2026-09-26 |
 | Alcance | `src/` (.NET 10), `tests/`, `frontend/` (Angular 22) frente a `docs/` |
-| Método | Lectura del código y de los documentos; `dotnet build`, `dotnet test`, `ng build`, `ng test` y `redocly lint` |
+| Método | Lectura del código y de los documentos; `dotnet build`, `dotnet test`, `ng build`, `ng test`, `redocly lint` y pruebas HTTP contra la API en ejecución |
 | Criterio de resolución | La documentación se alineó con el **código real**. El código no se modificó |
 
 ## 1. Verificación técnica
@@ -12,12 +12,12 @@
 | Comprobación | Resultado |
 |--------------|-----------|
 | `dotnet build` | 0 errores, 0 advertencias |
-| `dotnet test` | 37 pruebas en verde |
-| `ng build` / `ng test` | Compila; 11 pruebas en verde |
+| `dotnet test` | 64 pruebas en verde |
+| `ng build` / `ng test` | Compila; 25 pruebas en verde |
 | `redocly lint docs/api/Encuesta-v1.yaml` | Válido (antes y después de los cambios) |
 | Diagramas Mermaid | 6 diagramas de secuencia (`docs/specs/functional/diagrams/`) y los de `docs/architecture/` renderizan con `mmdc` |
 
-No se ejecutó el API contra SQL Server ni contra un proveedor de identidad (no disponibles en el entorno). Las respuestas HTTP descritas en el contrato se dedujeron del código (`GlobalExceptionHandler`, validadores y handlers); solo se comprobó en ejecución que una llamada sin token devuelve 401 `application/problem+json`.
+La API se ejecutó contra SQL Server (base `Encuesta_Dev`) con autenticación de desarrollo (`/dev/token`); no se probó con un proveedor OIDC real. Las respuestas HTTP del contrato se comprobaron con llamadas reales para crear, consultar, asignar, publicar, cerrar y para el circuito público (404, 410, 422, 409, 201). Quedan sin comprobar por HTTP: el cierre por plazo vencido (solo pruebas unitarias) y la carrera de doble envío (índice único).
 
 ## 2. Contrato OpenAPI frente al código
 
@@ -48,9 +48,9 @@ De los 25 escenarios de `02-user-stories.md`, cada uno quedó etiquetado:
 
 | Etiqueta | Escenarios | Historias |
 |----------|-----------|-----------|
-| `@implementado` | 3 | HU-01 (crear, título vacío, opciones < 2) |
-| `@solo-dominio` | 11 | HU-01 (no editar publicada), HU-02 (4), HU-03 (2: cerrada, vencida), HU-04 (4) — reglas probadas en `Encuesta.Domain`, sin endpoint ni pantalla |
-| `@pendiente` | 11 | HU-01 (editar borrador), HU-03 (5), HU-05 (5) |
+| `@implementado` | 16 | HU-01 (3), HU-02 (4), HU-03 (7), HU-04 (2: cierre manual, no cerrar borrador) |
+| `@solo-dominio` | 3 | HU-01 (no editar publicada), HU-04 (cierre automático, no reabrir) |
+| `@pendiente` | 6 | HU-01 (editar borrador), HU-05 (5) |
 
 Desviaciones de texto y comportamiento (tabla completa en `02-user-stories.md`): mensaje de título vacío, confirmación tras crear, edición de borrador inexistente, reapertura/`Duplicar` inexistentes, mensaje «ya no acepta respuestas» inexistente, 403 con mensaje distinto, fecha límite igual a «ahora» rechazada.
 
@@ -77,9 +77,14 @@ Desviaciones de texto y comportamiento (tabla completa en `02-user-stories.md`):
 Se dejan como trabajo pendiente porque el encargo era actualizar la documentación:
 
 1. Mensajes de validación de título/longitudes en español (alinear con Gherkin) o revisar el Gherkin.
-2. Endpoints y pantallas para publicar, cerrar, responder y resultados (HU-02 a HU-05); `RespuestaEncuesta`.
+2. HU-05: resultados agregados y exportación CSV.
 3. Edición de borrador (`QuitarPregunta`) y `Duplicar`.
-4. Outbox y despacho de eventos de dominio (la migración `InitialCreate` se añadió después de esta auditoría).
-5. Worker de cierre automático por plazo.
+4. Outbox y despacho de eventos de dominio.
+5. Worker de cierre automático por plazo (`CerrarSiVencida` ya existe en el dominio).
 6. Decidir si RF-01 exige ≥ 1 pregunta al crear o solo al publicar.
 7. Endpoint de eliminación para el administrador (RF-09).
+8. Caché Redis en la ruta pública y límite de tasa (el enlace es anónimo).
+
+## 6. Actualización posterior: circuito publicar → responder → cerrar
+
+Tras esta auditoría se implementaron HU-02, HU-03 y el cierre manual de HU-04, y los documentos se volvieron a alinear: contrato OpenAPI (5 endpoints de gestión y 2 públicos, respuesta 410), etiquetas Gherkin, estado de requisitos, modelo de dominio, C4 y los diagramas 02, 03 y 04. Durante las pruebas se corrigieron tres defectos: el orden de preguntas y opciones (las claves son GUID), y los formularios de Angular sin `FormsModule` cuyo `(ngSubmit)` nunca se disparaba.

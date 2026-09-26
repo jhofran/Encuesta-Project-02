@@ -126,10 +126,10 @@ Sincronizado con el código de `src/`, `tests/` y `frontend/`. Detalle y evidenc
 |-----------|--------|-------------|
 | RF-01 Crear encuesta con título, descripción y ≥ 1 pregunta | ✅ | API `POST /api/v1/Encuesta` + formulario Angular. La API acepta encuestas **sin** preguntas (el título es lo único obligatorio); la exigencia de ≥ 1 pregunta solo se aplica al publicar (RN-01) |
 | RF-02 Editar solo en borrador | 🟡 | El dominio bloquea cambios tras publicar; no existe endpoint de edición ni `QuitarPregunta` |
-| RF-03 Publicar y obtener enlace único | 🟡 | Solo dominio (`Publicar`, token de 32 hex); sin endpoint ni pantalla |
-| RF-04 Responder encuesta publicada y vigente | ❌ | Solo la regla `AceptaRespuestas`; no existe `RespuestaEncuesta` |
-| RF-05 Una respuesta por participante | ❌ | |
-| RF-06 Cierre manual y automático | 🟡 | Solo dominio (`Cerrar`, `CerrarSiVencida`); no hay endpoint ni worker |
+| RF-03 Publicar y obtener enlace único | ✅ | `POST /api/v1/Encuesta/{id}/publish` + formulario y enlace `/e/{token}` en el detalle |
+| RF-04 Responder encuesta publicada y vigente | ✅ | `GET/POST /api/v1/public/{token}` + pantalla pública Angular; 410 si está cerrada o vencida |
+| RF-05 Una respuesta por participante | ✅ | Hash de un token del navegador + índice único filtrado en SQL Server; 409 en el duplicado |
+| RF-06 Cierre manual y automático | 🟡 | Manual ✅ (`POST /{id}/close` + botón). Automático: solo dominio (`CerrarSiVencida`), falta el worker; mientras tanto la encuesta vencida ya rechaza respuestas |
 | RF-07 Resultados agregados | ❌ | |
 | RF-08 Exportar CSV | ❌ | |
 | RF-09 Administrador elimina encuestas | ❌ | El rol `admin` solo permite ver y reasignar encuestas ajenas |
@@ -137,12 +137,12 @@ Sincronizado con el código de `src/`, `tests/` y `frontend/`. Detalle y evidenc
 
 | Regla | Estado |
 |-------|--------|
-| RN-01 ≥ 1 pregunta para publicar | 🟡 Dominio |
-| RN-02 Preguntas inmutables tras publicar | 🟡 Dominio |
-| RN-03 Respuestas solo en publicada y vigente | 🟡 Dominio (`AceptaRespuestas`) |
-| RN-04 Obligatorias respondidas | ❌ |
+| RN-01 ≥ 1 pregunta para publicar | ✅ API y dominio (la interfaz oculta el botón) |
+| RN-02 Preguntas inmutables tras publicar | 🟡 Dominio (no existe endpoint para modificar preguntas) |
+| RN-03 Respuestas solo en publicada y vigente | ✅ API y dominio |
+| RN-04 Obligatorias respondidas | ✅ API, dominio y formulario |
 | RN-05 Opciones ≥ 2 | ✅ API, dominio y formulario |
-| RN-06 Anonimato | ❌ (solo el indicador `esAnonima` al publicar) |
+| RN-06 Anonimato | ✅ En encuestas anónimas no se guarda el participante autenticado; en respuesta única solo se guarda el hash de un token aleatorio |
 | RN-07 Cerrada no reabre | 🟡 Dominio (no existe operación de reapertura; falta `Duplicar`) |
 
 Leyenda: ✅ implementado de extremo a extremo · 🟡 solo en el dominio · ❌ pendiente.

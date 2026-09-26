@@ -13,9 +13,14 @@ info:
     la reasignación del responsable (propietario) de la encuesta a otro creador.
 
     **Estado de implementación (sincronizado con el código, 2026-09-26):**
-    solo existen los tres endpoints de este contrato. Publicar, cerrar, responder
-    y consultar resultados (HU-02 a HU-05) aún no tienen endpoint; las encuestas
-    creadas por esta API permanecen en `Borrador`.
+    cubre crear, consultar, reasignar, publicar y cerrar encuestas (HU-01, HU-02,
+    HU-04 manual) y el circuito público para responder (HU-03). Aún no existen
+    edición de borradores, cierre automático por plazo, resultados ni exportación
+    (HU-05).
+
+    **Rutas públicas:** `/api/v1/public/*` no requieren autenticación. Si la
+    petición lleva un JWT válido y la encuesta no es anónima, el `sub` se guarda
+    como participante.
 
     **Autenticación:** JWT Bearer. El claim `sub` debe ser un GUID (identifica al
     creador; si no lo es, la creación falla con 422 "El creador es obligatorio").
@@ -37,7 +42,9 @@ servers:
     description: Servidor de referencia
 tags:
   - name: Encuesta
-    description: Gestión de encuestas
+    description: Gestión de encuestas (propietario o administrador)
+  - name: Public
+    description: Consulta y respuesta de una encuesta publicada mediante su enlace; sin autenticación
 security:
   - bearerAuth: []
 paths:
@@ -139,6 +146,134 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+  /api/v1/Encuesta/{id}/publish:
+    post:
+      tags:
+        - Encuesta
+      summary: Publicar encuesta
+      description: |
+        Pasa la encuesta de `Borrador` a `Publicada` y genera el token del enlace
+        público (HU-02). Requiere al menos una pregunta (RN-01) y una fecha límite
+        estrictamente futura. Solo el propietario o un administrador.
+      operationId: publishEncuesta
+      parameters:
+        - $ref: '#/components/parameters/EncuestaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishEncuestaRequest'
+      responses:
+        '200':
+          description: Encuesta publicada; `token` y `fechaLimite` presentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncuestaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /api/v1/Encuesta/{id}/close:
+    post:
+      tags:
+        - Encuesta
+      summary: Cerrar encuesta
+      description: |
+        Cierre manual (HU-04): `Publicada` pasa a `Cerrada`, estado terminal (RN-07).
+        Solo el propietario o un administrador. Cerrar una encuesta en `Borrador`
+        o ya `Cerrada` devuelve 409.
+      operationId: closeEncuesta
+      parameters:
+        - $ref: '#/components/parameters/EncuestaId'
+      responses:
+        '200':
+          description: Encuesta cerrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncuestaResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/public/{token}:
+    get:
+      tags:
+        - Public
+      summary: Obtener encuesta pública
+      description: |
+        Devuelve las preguntas de una encuesta publicada y vigente para mostrar el
+        formulario (HU-03). No expone propietario, token ni estado interno.
+      operationId: getPublicEncuesta
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PublicToken'
+      responses:
+        '200':
+          description: Encuesta disponible para responder.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicEncuestaResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+  /api/v1/public/{token}/respuestas:
+    post:
+      tags:
+        - Public
+      summary: Enviar respuestas
+      description: |
+        Registra la respuesta de un participante (HU-03). Reglas: la encuesta debe
+        estar publicada y dentro de su plazo (410 si no); las preguntas obligatorias
+        deben responderse (422); en `respuestaUnica` se exige `participanteToken` y
+        un segundo envío con el mismo token devuelve 409. En encuestas anónimas no
+        se guarda el participante autenticado. Valores por tipo: id de opción
+        (`OpcionUnica`, exactamente uno), ids de opción sin repetir
+        (`OpcionMultiple`), texto de hasta 2000 caracteres (`TextoLibre`) o un
+        entero de 1 a 5 (`Escala1a5`).
+      operationId: submitRespuesta
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PublicToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRespuestaRequest'
+      responses:
+        '201':
+          description: Respuesta registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespuestaRecibidaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 components:
   securitySchemes:
     bearerAuth:
@@ -154,7 +289,20 @@ components:
       schema:
         type: string
         format: uuid
+    PublicToken:
+      name: token
+      in: path
+      required: true
+      description: Token del enlace público de la encuesta.
+      schema:
+        type: string
   responses:
+    Gone:
+      description: La encuesta existe pero ya no acepta respuestas (cerrada o con el plazo vencido).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     BadRequest:
       description: Solicitud mal formada (JSON inválido, enum desconocido o GUID malformado en el cuerpo).
       content:
@@ -266,6 +414,87 @@ components:
           type: string
           format: uuid
           description: Identificador del nuevo creador responsable.
+    PublishEncuestaRequest:
+      type: object
+      required:
+        - fechaLimite
+      properties:
+        fechaLimite:
+          type: string
+          format: date-time
+          description: Debe ser posterior al momento de la publicación.
+        esAnonima:
+          type: boolean
+          default: false
+        respuestaUnica:
+          type: boolean
+          default: false
+    PublicEncuestaResponse:
+      type: object
+      required:
+        - titulo
+        - esAnonima
+        - respuestaUnica
+        - preguntas
+      properties:
+        titulo:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        esAnonima:
+          type: boolean
+        respuestaUnica:
+          type: boolean
+        fechaLimite:
+          type: string
+          format: date-time
+          nullable: true
+        preguntas:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreguntaResponse'
+    RespuestaItemRequest:
+      type: object
+      required:
+        - preguntaId
+      properties:
+        preguntaId:
+          type: string
+          format: uuid
+        valores:
+          type: array
+          description: Vacío u omitido si la pregunta no se responde (solo válido si no es obligatoria).
+          items:
+            type: string
+            maxLength: 2000
+    SubmitRespuestaRequest:
+      type: object
+      required:
+        - respuestas
+      properties:
+        participanteToken:
+          type: string
+          maxLength: 100
+          description: |
+            Valor aleatorio generado por el navegador. Obligatorio si la encuesta es de
+            respuesta única; el servidor solo guarda su hash.
+        respuestas:
+          type: array
+          items:
+            $ref: '#/components/schemas/RespuestaItemRequest'
+    RespuestaRecibidaResponse:
+      type: object
+      required:
+        - id
+        - enviadaEn
+      properties:
+        id:
+          type: string
+          format: uuid
+        enviadaEn:
+          type: string
+          format: date-time
     OpcionResponse:
       type: object
       required:
@@ -369,7 +598,7 @@ components:
             URI que identifica el tipo de problema. Las excepciones controladas por la
             API usan `https://encuesta.local/problems/{slug}` con slug `validation-error`
             (422), `business-rule-violation` (422), `conflict` (409), `not-found` (404),
-            `forbidden` (403), `bad-request` (400) o `internal-error` (500). Los 401 y
+            `forbidden` (403), `gone` (410), `bad-request` (400) o `internal-error` (500). Los 401 y
             los 404 de enrutamiento los genera el framework y usan URIs de RFC 9110
             (`https://tools.ietf.org/html/rfc9110#section-...`).
           example: https://encuesta.local/problems/validation-error

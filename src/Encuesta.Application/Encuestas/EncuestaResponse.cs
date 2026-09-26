@@ -33,8 +33,14 @@ public sealed record EncuestaResponse(
         e.RespuestaUnica,
         e.Token,
         e.FechaLimite,
-        [.. e.Preguntas.Select(p => new PreguntaResponse(
-            p.Id, p.Texto, p.Tipo, p.EsObligatoria, p.Orden,
-            [.. p.Opciones.Select(o => new OpcionResponse(o.Id, o.Texto, o.Orden))]))],
+        PreguntasOrdenadas(e),
         e.CreadaEn);
+
+    /// <summary>Las claves son GUID: el orden de la base de datos no es el de la encuesta, se ordena por `Orden`.</summary>
+    internal static IReadOnlyList<PreguntaResponse> PreguntasOrdenadas(EncuestaAggregate e) =>
+    [
+        .. e.Preguntas.OrderBy(p => p.Orden).Select(p => new PreguntaResponse(
+            p.Id, p.Texto, p.Tipo, p.EsObligatoria, p.Orden,
+            [.. p.Opciones.OrderBy(o => o.Orden).Select(o => new OpcionResponse(o.Id, o.Texto, o.Orden))]))
+    ];
 }

@@ -82,3 +82,36 @@ export interface ProblemDetails {
   traceId?: string;
   errors?: Record<string, string[]>;
 }
+
+export interface PublishEncuestaRequest {
+  /** ISO 8601 (UTC). */
+  fechaLimite: string;
+  esAnonima: boolean;
+  respuestaUnica: boolean;
+}
+
+/** Vista pública: no incluye propietario, token ni estado interno. */
+export interface PublicEncuestaResponse {
+  titulo: string;
+  descripcion?: string | null;
+  esAnonima: boolean;
+  respuestaUnica: boolean;
+  fechaLimite?: string | null;
+  preguntas: PreguntaResponse[];
+}
+
+export interface RespuestaItemRequest {
+  preguntaId: string;
+  /** Ids de opción (tipos de opción), texto libre o número 1-5 (escala). */
+  valores: string[];
+}
+
+export interface SubmitRespuestaRequest {
+  participanteToken?: string;
+  respuestas: RespuestaItemRequest[];
+}
+
+export interface RespuestaRecibidaResponse {
+  id: string;
+  enviadaEn: string;
+}

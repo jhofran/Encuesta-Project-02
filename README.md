@@ -11,6 +11,11 @@ Requisitos: .NET 10 SDK, Node.js, una instancia de SQL Server accesible.
 3. Frontend: `cd frontend && npm install && npx ng serve` → http://localhost:4200 (el proxy envía `/api` y `/dev` al backend).
 4. En la pantalla de login usa «Entrar como usuario» o «Entrar como admin». Esos tokens salen de `POST /dev/token`, que **solo existe en Development**.
 
+## Flujo de uso
+1. Entra con «Entrar como usuario» y crea una encuesta.
+2. En el detalle, elige la fecha límite y pulsa «Publicar encuesta»: aparece el enlace `/e/{token}`.
+3. Abre ese enlace (en otra ventana, sin sesión) para responder. «Cerrar encuesta» deja de aceptar respuestas.
+
 ## Pruebas
 - `dotnet test`
 - `cd frontend && npx ng test --watch=false`

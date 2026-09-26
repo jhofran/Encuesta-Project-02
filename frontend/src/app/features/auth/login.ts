@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, isDevMode, signal } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService, looksLikeJwt } from '../../core/auth';
 import { FriendlyError, toFriendlyError } from '../../core/problem-details';
@@ -8,7 +8,7 @@ import { ErrorAlert } from '../../shared/error-alert';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, ErrorAlert],
+  imports: [FormsModule, ReactiveFormsModule, ErrorAlert],
   template: `
     <section class="card narrow">
       <h1>Ingresar</h1>

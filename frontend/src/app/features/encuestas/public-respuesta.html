@@ -1,0 +1,72 @@
+@if (loading()) {
+  <p class="muted" role="status">Cargando…</p>
+} @else if (error(); as e) {
+  <app-error-alert [error]="e" />
+} @else if (sent()) {
+  <section class="card" role="status">
+    <h1>¡Gracias por participar!</h1>
+    <p class="muted">Tu respuesta se registró correctamente.</p>
+  </section>
+} @else if (encuesta(); as enc) {
+  <section class="card">
+    <h1>{{ enc.titulo }}</h1>
+    @if (enc.descripcion) {
+      <p>{{ enc.descripcion }}</p>
+    }
+    <p class="muted">
+      @if (enc.esAnonima) { Encuesta anónima. }
+      @if (enc.fechaLimite) { Disponible hasta {{ enc.fechaLimite | date: 'medium' }}. }
+    </p>
+  </section>
+
+  <form (submit)="onSubmit($event)" novalidate>
+    @for (p of enc.preguntas; track p.id; let i = $index) {
+      <fieldset class="card pregunta">
+        <legend>{{ i + 1 }}. {{ p.texto }}@if (p.esObligatoria) { <span class="req" aria-label="obligatoria"> *</span> }</legend>
+
+        @switch (p.tipo) {
+          @case ('OpcionUnica') {
+            @for (o of p.opciones; track o.id) {
+              <label class="check">
+                <input type="radio" [name]="'p-' + p.id" [checked]="isSelected(p, o.id)"
+                  (change)="setSingle(p, o.id)" /> {{ o.texto }}
+              </label>
+            }
+          }
+          @case ('OpcionMultiple') {
+            @for (o of p.opciones; track o.id) {
+              <label class="check">
+                <input type="checkbox" [checked]="isSelected(p, o.id)"
+                  (change)="toggle(p, o.id, $any($event.target).checked)" /> {{ o.texto }}
+              </label>
+            }
+          }
+          @case ('Escala1a5') {
+            <div class="row escala">
+              @for (n of escala; track n) {
+                <label class="check">
+                  <input type="radio" [name]="'p-' + p.id" [checked]="isSelected(p, '' + n)"
+                    (change)="setSingle(p, '' + n)" /> {{ n }}
+                </label>
+              }
+            </div>
+            <p class="muted">1 = muy bajo · 5 = muy alto</p>
+          }
+          @default {
+            <textarea rows="3" [attr.aria-label]="p.texto" maxlength="2000"
+              (input)="setSingle(p, $any($event.target).value)"></textarea>
+          }
+        }
+      </fieldset>
+    }
+
+    @if (showMissing() && missing().length > 0) {
+      <p class="field-error" role="alert">Responde las preguntas obligatorias</p>
+    }
+    <app-error-alert [error]="submitError()" />
+
+    <button type="submit" class="btn btn-primary" [disabled]="sending()">
+      {{ sending() ? 'Enviando…' : 'Enviar respuestas' }}
+    </button>
+  </form>
+}

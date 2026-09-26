@@ -14,6 +14,7 @@ public static class DependencyInjection
             options.UseSqlServer(configuration.GetConnectionString("SqlServer")));
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<EncuestaDbContext>());
         services.AddScoped<IEncuestaRepository, EncuestaRepository>();
+        services.AddScoped<IRespuestaRepository, RespuestaRepository>();
 
         // Redis es solo caché (nunca fuente de verdad); sin cadena de conexión se usa memoria local.
         if (configuration.GetConnectionString("Redis") is { Length: > 0 } redis)

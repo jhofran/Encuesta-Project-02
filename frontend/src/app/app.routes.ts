@@ -8,6 +8,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/login').then((m) => m.Login),
   },
   {
+    path: 'e/:token',
+    title: 'Responder encuesta · Encuesta',
+    loadComponent: () =>
+      import('./features/encuestas/public-respuesta').then((m) => m.PublicRespuesta),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     children: [

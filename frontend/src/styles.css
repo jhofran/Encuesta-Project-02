@@ -110,3 +110,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible,
   .container { padding: .75rem; }
   .topbar { flex-wrap: wrap; }
 }
+
+.req { color: var(--danger); }
+.pregunta legend { font-weight: 600; padding: 0 .25rem; }
+.pregunta .check { margin: .35rem 0; }
+.escala { gap: 1rem; }
+input[type='datetime-local'], select { min-height: 2.5rem; }
+input[type='radio'], input[type='checkbox'] { width: auto; }

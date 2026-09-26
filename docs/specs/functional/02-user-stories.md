@@ -11,8 +11,8 @@ Cada escenario lleva una etiqueta Gherkin que indica hasta dónde llega el códi
 
 | Etiqueta | Significado |
 |----------|-------------|
-| `@implementado` | Cubierto de extremo a extremo: API, dominio y (si aplica) interfaz Angular |
-| `@solo-dominio` | La regla existe y está probada en `Encuesta.Domain`, pero **ningún endpoint ni pantalla la expone** |
+| `@implementado` | Cubierto de extremo a extremo: API, dominio y interfaz Angular |
+| `@solo-dominio` | La regla existe y está probada en `Encuesta.Domain`, pero **ningún endpoint ni pantalla la expone** (hoy: cierre automático por plazo, reapertura y edición tras publicar) |
 | `@pendiente` | Sin implementación |
 
 **Desviaciones de texto detectadas** (el comportamiento es equivalente, el mensaje no):
@@ -23,9 +23,10 @@ Cada escenario lleva una etiqueta Gherkin que indica hasta dónde llega el códi
 | Crear encuesta en borrador… | "veo un mensaje de confirmación" | La interfaz navega al detalle de la encuesta creada; no muestra un mensaje de confirmación |
 | Editar una encuesta en borrador | Modificar el texto de una pregunta | No existe edición ni `QuitarPregunta`; las preguntas solo se agregan al crear |
 | No reabrir una encuesta cerrada | Error "Una encuesta cerrada no puede reabrirse" y opción "Duplicar encuesta" | No hay operación de reapertura ni `Duplicar`; cerrar una encuesta ya cerrada lanza "Solo se pueden cerrar encuestas publicadas" |
-| Encuesta cerrada / con fecha límite vencida | Mensaje "Esta encuesta ya no acepta respuestas" | El dominio solo expone `AceptaRespuestas(ahora) → false`; el mensaje no existe |
 | Acceso denegado a resultados ajenos | "No tienes permiso para ver estos resultados" | El acceso denegado existente (GET/PUT de encuesta) responde 403 "Sin permiso sobre la encuesta" |
-| Fecha límite en el pasado | Rechaza fecha pasada | También rechaza una fecha igual a "ahora" (debe ser estrictamente futura) |
+| Fecha límite en el pasado | Rechaza fecha pasada | También rechaza una fecha igual a "ahora" (debe ser estrictamente futura). La interfaz no valida la fecha en el cliente: muestra el error 422 de la API |
+| Encuesta con fecha límite vencida | Rechaza el envío | Solo se prueba con pruebas unitarias: por API no se puede crear una encuesta con plazo ya vencido (la fecha debe ser futura al publicar) |
+| Encuesta cerrada / vencida | Mensaje "Esta encuesta ya no acepta respuestas" | Implementado como 410 Gone; también se muestra al abrir el enlace |
 
 ---
 
@@ -88,27 +89,27 @@ Característica: Publicar encuesta
   Antecedentes:
     Dado que soy un creador autenticado
 
-  @solo-dominio
+  @implementado
   Escenario: Publicar una encuesta válida
     Dado que tengo una encuesta en "Borrador" con al menos 1 pregunta
     Cuando la publico con fecha límite "2026-12-31"
     Entonces su estado cambia a "Publicada"
     Y el sistema genera un enlace único de respuesta
 
-  @solo-dominio
+  @implementado
   Escenario: No publicar una encuesta sin preguntas
     Dado que tengo una encuesta en "Borrador" sin preguntas
     Cuando intento publicarla
     Entonces veo el error "La encuesta debe tener al menos una pregunta"
     Y el estado sigue siendo "Borrador"
 
-  @solo-dominio
+  @implementado
   Escenario: Fecha límite en el pasado
     Dado que tengo una encuesta en "Borrador" con preguntas
     Cuando intento publicarla con fecha límite "2020-01-01"
     Entonces veo el error "La fecha límite debe ser futura"
 
-  @solo-dominio
+  @implementado
   Escenario: Configurar encuesta anónima
     Dado que tengo una encuesta en "Borrador" con preguntas
     Cuando la publico marcándola como "anónima"
@@ -127,7 +128,7 @@ Diagrama: ![HU-03](diagrams/03-responder-encuesta.svg)
 # language: es
 Característica: Responder encuesta
 
-  @pendiente
+  @implementado
   Escenario: Enviar respuestas válidas
     Dado que la encuesta "Satisfacción del cliente" está "Publicada" y vigente
     Cuando abro su enlace
@@ -136,28 +137,28 @@ Característica: Responder encuesta
     Entonces la respuesta se registra
     Y veo el mensaje "¡Gracias por participar!"
 
-  @pendiente
+  @implementado
   Escenario: Faltan preguntas obligatorias
     Dado que la encuesta está "Publicada" y vigente
     Cuando envío la encuesta sin responder una pregunta obligatoria
     Entonces veo el error "Responde las preguntas obligatorias"
     Y no se registra la respuesta
 
-  @solo-dominio
+  @implementado
   Escenario: Encuesta cerrada
     Dado que la encuesta está en estado "Cerrada"
     Cuando abro su enlace
     Entonces veo el mensaje "Esta encuesta ya no acepta respuestas"
     Y no se muestra el formulario
 
-  @solo-dominio
+  @implementado
   Escenario: Encuesta con fecha límite vencida
     Dado que la fecha límite de la encuesta ya pasó
     Cuando intento enviar mis respuestas
     Entonces el sistema rechaza el envío
     Y veo el mensaje "Esta encuesta ya no acepta respuestas"
 
-  @pendiente
+  @implementado
   Escenario: Respuesta duplicada en encuesta de respuesta única
     Dado que la encuesta es de respuesta única
     Y ya envié una respuesta
@@ -165,13 +166,13 @@ Característica: Responder encuesta
     Entonces veo el mensaje "Ya has respondido esta encuesta"
     Y no se registra una segunda respuesta
 
-  @pendiente
+  @implementado
   Escenario: Encuesta anónima no guarda identidad
     Dado que la encuesta es "anónima"
     Cuando envío mis respuestas
     Entonces la respuesta se registra sin datos que me identifiquen
 
-  @pendiente
+  @implementado
   Escenario: Enlace inexistente
     Cuando abro un enlace de encuesta que no existe
     Entonces veo el error "Encuesta no encontrada"
@@ -191,7 +192,7 @@ Característica: Cerrar encuesta
   Antecedentes:
     Dado que soy un creador autenticado
 
-  @solo-dominio
+  @implementado
   Escenario: Cierre manual
     Dado que tengo una encuesta en estado "Publicada"
     Cuando la cierro
@@ -211,7 +212,7 @@ Característica: Cerrar encuesta
     Entonces veo el error "Una encuesta cerrada no puede reabrirse"
     Y se ofrece la opción "Duplicar encuesta"
 
-  @solo-dominio
+  @implementado
   Escenario: No cerrar una encuesta en borrador
     Dado que tengo una encuesta en estado "Borrador"
     Cuando intento cerrarla

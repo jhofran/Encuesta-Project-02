@@ -1,19 +1,29 @@
 sequenceDiagram
-    actor C as Creador
-    participant UI as Interfaz Web
-    participant API as API Encuesta
-    participant DB as Base de Datos
-    Note over UI,DB: PLANEADO - sin endpoint implementado (rutas orientativas)
-    C->>UI: Publicar con fecha límite
-    UI->>API: POST /encuestas/{id}/publicar
-    API->>DB: Obtener encuesta y preguntas
-    DB-->>API: Encuesta
-    alt Sin preguntas o fecha pasada (RN-01)
-        API-->>UI: 422 error
-        UI-->>C: Muestra error
-    else Válida
-        API->>DB: Estado = Publicada, generar enlace único
-        DB-->>API: OK
-        API-->>UI: 200 enlace
-        UI-->>C: Muestra enlace para compartir
+    actor C as Propietario / Admin
+    participant UI as Angular SPA
+    participant API as Web API (.NET 10)
+    participant D as Encuesta (dominio)
+    participant DB as SQL Server
+    C->>UI: Elige fecha límite, anónima y respuesta única
+    UI->>API: POST /api/v1/Encuesta/{id}/publish (Bearer JWT)
+    API->>DB: Cargar encuesta con preguntas
+    DB-->>API: Encuesta o nada
+    alt No existe
+        API-->>UI: 404 problem+json
+    else Usuario no es propietario ni admin
+        API-->>UI: 403 problem+json
+    else Autorizado
+        API->>D: Publicar(fechaLimite, esAnonima, respuestaUnica)
+        alt Ya estaba publicada o cerrada
+            D-->>API: DomainConflictException
+            API-->>UI: 409 problem+json
+        else Sin preguntas o fecha no futura (RN-01)
+            D-->>API: DomainValidationException
+            API-->>UI: 422 problem+json
+        else OK
+            D->>D: Estado = Publicada, genera token (32 hex)
+            API->>DB: UPDATE Encuesta
+            API-->>UI: 200 EncuestaResponse (token, fechaLimite)
+            UI-->>C: Muestra el enlace /e/{token} para compartir
+        end
     end

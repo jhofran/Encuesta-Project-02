@@ -20,6 +20,7 @@ internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetai
             DomainValidationException => (422, "business-rule-violation", "Regla de negocio incumplida"),
             DomainConflictException => (409, "conflict", "Conflicto de estado"),
             NotFoundException => (404, "not-found", "Recurso no encontrado"),
+            EncuestaNoDisponibleException => (410, "gone", "Encuesta no disponible"),
             ForbiddenException => (403, "forbidden", "Acceso denegado"),
             BadHttpRequestException => (400, "bad-request", "Solicitud mal formada"),
             _ => (500, "internal-error", "Error interno")

@@ -8,16 +8,16 @@ Complementa [domain-model.md](domain-model.md). Decisión de estilo: [ADR-001](a
 
 | Elemento | Estado | Detalle real |
 |---|---|---|
-| Aplicación Web | ✅ Parcial | Angular 22 (`frontend/`), standalone + signals. Pantallas: login (JWT pegado), inicio, crear encuesta, detalle y asignación. Faltan publicar, cerrar, responder y resultados |
-| Web API (.NET 10) | ✅ Parcial | Minimal APIs + MediatR 14 + FluentValidation 12 + JWT Bearer. Solo 3 endpoints (`POST`, `GET {id}`, `PUT {id}/assign`) bajo `/api/v1/Encuesta` |
-| SQL Server | ✅ Parcial | EF Core 10; tablas `Encuesta`, `Pregunta`, `OpcionPregunta` con migración `InitialCreate` (en Development se aplica al arrancar). No existen `Outbox` ni el índice único de respuestas |
+| Aplicación Web | ✅ Parcial | Angular 22 (`frontend/`), standalone + signals. Pantallas: login, inicio, crear encuesta, detalle (asignar, publicar, cerrar, enlace público) y `/e/:token` para responder. Falta resultados |
+| Web API (.NET 10) | ✅ Parcial | Minimal APIs + MediatR 14 + FluentValidation 12 + JWT Bearer. Gestión bajo `/api/v1/Encuesta` (`POST`, `GET {id}`, `PUT {id}/assign`, `POST {id}/publish`, `POST {id}/close`) y rutas públicas anónimas bajo `/api/v1/public` (`GET {token}`, `POST {token}/respuestas`) |
+| SQL Server | ✅ Parcial | EF Core 10; tablas `Encuesta`, `Pregunta`, `OpcionPregunta`, `Respuesta` e `ItemRespuesta` (migraciones `InitialCreate` y `AddRespuestas`; en Development se aplican al arrancar) con el índice único filtrado de respuestas. No existe `Outbox` |
 | Redis | 🟡 Solo registrado | `AddStackExchangeRedisCache` si hay cadena `ConnectionStrings:Redis`; si no, caché en memoria. Ningún caso de uso lo consume todavía |
 | Dapper (lecturas CQRS) | ❌ Planeado | Las consultas usan EF Core (`GetByIdAsync` con `Include`) |
 | Worker de fondo | ❌ Planeado | No existe el proyecto |
 | Outbox y despacho de eventos | ❌ Planeado | Los eventos se acumulan en memoria sin persistirse |
 | Rate limiting, OpenTelemetry, health checks | ❌ Planeado | |
 | Proveedor OIDC | ➖ Externo | `Authentication:Authority` apunta a un valor ficticio (`idp.encuesta.local`) |
-| Rutas públicas `/publico/{token}` | ❌ Planeado | Ver §6 |
+| Rutas públicas | ✅ Implementado | `/api/v1/public/{token}` (no `/publico/`); ver §6 |
 
 ## 1. Nivel 1 — Contexto del sistema
 
@@ -120,7 +120,9 @@ flowchart LR
 
 En el código actual `QRY` usa EF Core mediante `IEncuestaRepository` (no hay puertos de lectura separados). Dependencias: `Api → Application → Domain`; `Infrastructure → Application/Domain`. El dominio no referencia nada externo.
 
-## 6. Flujo clave: responder encuesta (HU-03) — *planeado, no implementado*
+## 6. Flujo clave: responder encuesta (HU-03)
+
+> Implementado **sin la capa Redis**: la API consulta SQL Server directamente. Las rutas reales son `/api/v1/public/{token}` y `/api/v1/public/{token}/respuestas` (ver [diagrama 03](../specs/functional/diagrams/03-responder-encuesta.mmd)). El diagrama siguiente muestra el diseño objetivo con caché.
 
 ```mermaid
 sequenceDiagram
@@ -130,7 +132,7 @@ sequenceDiagram
     participant R as Redis
     participant S as SQL Server
     P->>W: Abre enlace /e/{token}
-    W->>A: GET /publico/{token}
+    W->>A: GET /api/v1/public/{token}
     A->>R: GET encuesta:pub:{token}
     alt Hit
         R-->>A: Vista pública
@@ -141,7 +143,7 @@ sequenceDiagram
     end
     A-->>W: 200 preguntas (o 404/410)
     P->>W: Envía respuestas
-    W->>A: POST /publico/{token}/respuestas
+    W->>A: POST /api/v1/public/{token}/respuestas
     A->>R: Verificar resp:{encuestaId}:{huella}
     A->>A: Comando RegistrarRespuesta (valida RN-03/04/06)
     A->>S: INSERT respuesta + outbox (transacción)

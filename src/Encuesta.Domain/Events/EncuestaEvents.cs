@@ -23,3 +23,8 @@ public sealed record PreguntaAgregada(Guid EncuestaId, Guid PreguntaId, DateTime
 {
     public Guid EventId { get; } = Guid.NewGuid();
 }
+
+public sealed record RespuestaRegistrada(Guid RespuestaId, Guid EncuestaId, DateTimeOffset OcurridoEn) : IDomainEvent
+{
+    public Guid EventId { get; } = Guid.NewGuid();
+}

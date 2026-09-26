@@ -10,14 +10,16 @@ Deriva de [01-vision-document.md](../specs/functional/01-vision-document.md) (RF
 
 | Elemento del diseño | Estado | Nota |
 |---|---|---|
-| Agregado `Encuesta` (`Crear`, `AgregarPregunta`, `Publicar`, `Cerrar`, `CerrarSiVencida`, `AceptaRespuestas`, `EvaluarSla`) | ✅ Implementado | 37 pruebas unitarias en verde |
+| Agregado `Encuesta` (`Crear`, `AgregarPregunta`, `Publicar`, `Cerrar`, `CerrarSiVencida`, `AceptaRespuestas`, `EvaluarSla`) | ✅ Implementado | Expuesto por API salvo `CerrarSiVencida` (falta el worker) |
 | `Asignar(nuevoResponsableId)` | ✅ Implementado | No estaba en el diseño original; nace del contrato `PUT /assign` |
 | `SLAStatus` | ✅ Implementado | Enum calculado, no persistido |
 | `Pregunta`, `OpcionPregunta`, `MotivoCierre` | ✅ Implementado | |
 | Eventos `EncuestaCreada`, `PreguntaAgregada`, `EncuestaPublicada`, `EncuestaCerrada` | 🟡 Se generan, no se despachan | No hay outbox ni manejadores; `ClearDomainEvents` no se invoca |
-| Eventos `EncuestaPorVencer`, `RespuestaRegistrada` | ❌ Pendiente | |
+| Evento `EncuestaPorVencer` | ❌ Pendiente | Depende del worker de plazos |
+| Evento `RespuestaRegistrada` | 🟡 Se genera, no se despacha | |
 | `QuitarPregunta`, `Duplicar` | ❌ Pendiente | Necesarios para HU-01 (editar) y HU-04 (reabrir → duplicar) |
-| `RespuestaEncuesta` / `ItemRespuesta` | ❌ Pendiente | HU-03 |
+| Orden de preguntas y opciones | ✅ Por `Orden` | Las claves son GUID; el mapeo a DTO ordena por `Orden` |
+| `RespuestaEncuesta` / `ItemRespuesta` | ✅ Implementado | HU-03. Añade `Huella` (hash del token del navegador, solo en respuesta única) y `EncuestaNoDisponibleException` (410) |
 | `PlazoRespuesta`, `TokenPublico` (Value Objects) | ➖ Simplificado | En el código son `DateTimeOffset? FechaLimite` y `string Token` (32 hex) |
 | Reloj inyectable | ➖ Difiere | Se usa `TimeProvider` de .NET, no `IClock` |
 
@@ -97,16 +99,17 @@ classDiagram
         Escala1a5
     }
     class RespuestaEncuesta {
-        <<Aggregate Root — PENDIENTE (HU-03)>>
-        +RespuestaId Id
-        +EncuestaId EncuestaId
+        <<Aggregate Root>>
+        +Guid Id
+        +Guid EncuestaId
         +Guid? ParticipanteId
+        +string? Huella
         +DateTimeOffset EnviadaEn
-        +Registrar(encuesta, items, ahora)$ RespuestaEncuesta
+        +Registrar(encuesta, respuestas, participanteId, huella, ahora)$ RespuestaEncuesta
     }
     class ItemRespuesta {
         <<Entity>>
-        +PreguntaId PreguntaId
+        +Guid PreguntaId
         +string Valor
     }
 
@@ -131,9 +134,9 @@ classDiagram
 | Solo cerrar si `Publicada` | HU-04 | `Cerrar` |
 | Cerrada no reabre; se duplica | RN-07 | Sin operación de reapertura (implementado); `Duplicar()` pendiente |
 | Acepta respuestas solo si `Publicada` y plazo no vencido | RN-03 | `AceptaRespuestas` |
-| Obligatorias respondidas | RN-04 | `RespuestaEncuesta.Registrar` (pendiente) |
-| Anónima ⇒ sin `ParticipanteId` | RN-06 | `RespuestaEncuesta.Registrar` (pendiente) |
-| Una respuesta por participante (si `RespuestaUnica`) | RF-05 | Servicio de dominio + índice único en BD (pendiente) |
+| Obligatorias respondidas | RN-04 | `RespuestaEncuesta.Registrar` |
+| Anónima ⇒ sin `ParticipanteId` | RN-06 | `RespuestaEncuesta.Registrar` |
+| Una respuesta por participante (si `RespuestaUnica`) | RF-05 | `SubmitRespuestaHandler` (consulta previa por huella) + índice único filtrado `IX_Respuesta_EncuestaId_Huella`; la carrera se traduce a 409 |
 
 ### 3.2 Ciclo de vida
 
@@ -177,7 +180,7 @@ stateDiagram-v2
 
 ## 5. Eventos de dominio (`DomainEvents`)
 
-Se emiten desde el agregado (`AggregateRoot.Raise`). **Diseño objetivo:** se recogen al confirmar la transacción (patrón *outbox*) y se publican a los manejadores. **Estado actual:** los eventos se acumulan en memoria en `DomainEvents` y no se persisten ni se despachan (no existe outbox, despachador ni manejadores); `EncuestaPorVencer` y `RespuestaRegistrada` no están implementados. El flujo 5.1 describe el diseño objetivo.
+Se emiten desde el agregado (`AggregateRoot.Raise`). **Diseño objetivo:** se recogen al confirmar la transacción (patrón *outbox*) y se publican a los manejadores. **Estado actual:** los eventos se acumulan en memoria en `DomainEvents` y no se persisten ni se despachan (no existe outbox, despachador ni manejadores); `EncuestaPorVencer` no está implementado. El flujo 5.1 describe el diseño objetivo.
 
 ```mermaid
 classDiagram

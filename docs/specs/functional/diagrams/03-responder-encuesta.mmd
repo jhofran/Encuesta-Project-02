@@ -1,36 +1,37 @@
 sequenceDiagram
     actor P as Participante
-    participant UI as Interfaz Web
-    participant API as API Encuesta
-    participant DB as Base de Datos
-    Note over UI,DB: PLANEADO - sin endpoint implementado (rutas orientativas)
-    P->>UI: Abre enlace de la encuesta
-    UI->>API: GET /publico/{token}
-    API->>DB: Buscar encuesta
+    participant UI as Angular SPA (/e/:token)
+    participant API as Web API (.NET 10)
+    participant D as RespuestaEncuesta (dominio)
+    participant DB as SQL Server
+    P->>UI: Abre el enlace /e/{token}
+    UI->>API: GET /api/v1/public/{token} (sin autenticación)
+    API->>DB: Buscar encuesta por token
     DB-->>API: Encuesta o nada
-    alt No existe
-        API-->>UI: 404
-        UI-->>P: Encuesta no encontrada
-    else Cerrada o vencida (RN-03)
-        API-->>UI: 410 Gone
-        UI-->>P: Ya no acepta respuestas
+    alt Token inexistente
+        API-->>UI: 404 "Encuesta no encontrada"
+        UI-->>P: Muestra el error
+    else Cerrada o plazo vencido (RN-03)
+        API-->>UI: 410 "Esta encuesta ya no acepta respuestas"
+        UI-->>P: Muestra el mensaje, sin formulario
     else Vigente
-        API-->>UI: 200 preguntas
-        UI-->>P: Muestra formulario
+        API-->>UI: 200 preguntas (sin propietario ni token)
+        UI-->>P: Muestra el formulario
         P->>UI: Responde y envía
-        UI->>API: POST /publico/{token}/respuestas
-        API->>API: Validar obligatorias (RN-04)
-        API->>DB: Verificar respuesta previa (RF-05)
-        alt Faltan obligatorias
-            API-->>UI: 422
-            UI-->>P: Responde las obligatorias
-        else Ya respondió
-            API-->>UI: 409 Conflict
-            UI-->>P: Ya has respondido
-        else Válida
-            API->>DB: Guardar respuesta (sin identidad si anónima, RN-06)
-            DB-->>API: OK
-            API-->>UI: 201
-            UI-->>P: Gracias por participar
+        UI->>API: POST /api/v1/public/{token}/respuestas
+        API->>D: Registrar(respuestas, participante, huella)
+        alt Falta obligatoria (RN-04) o valor inválido
+            D-->>API: DomainValidationException
+            API-->>UI: 422 "Responde las preguntas obligatorias"
+        else OK
+            API->>DB: ¿Existe respuesta con la misma huella? (RF-05)
+            alt Respuesta única y ya respondió
+                API-->>UI: 409 "Ya has respondido esta encuesta"
+            else Nueva
+                API->>DB: INSERT Respuesta + ItemRespuesta (índice único por huella)
+                DB-->>API: OK
+                API-->>UI: 201 { id, enviadaEn }
+                UI-->>P: "¡Gracias por participar!"
+            end
         end
     end

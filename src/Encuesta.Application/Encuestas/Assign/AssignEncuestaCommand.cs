@@ -1,5 +1,4 @@
 using Encuesta.Application.Abstractions;
-using Encuesta.Application.Common;
 using FluentValidation;
 using MediatR;
 
@@ -18,11 +17,8 @@ public sealed class AssignEncuestaHandler(
 {
     public async Task<EncuestaResponse> Handle(AssignEncuestaCommand request, CancellationToken cancellationToken)
     {
-        var encuesta = await repository.GetByIdAsync(request.Id, cancellationToken)
-            ?? throw new NotFoundException("La encuesta no existe");
-
-        if (encuesta.CreadorId != currentUser.UserId && !currentUser.IsAdmin)
-            throw new ForbiddenException("Solo el propietario o un administrador pueden reasignar");
+        var encuesta = await repository.GetOwnedAsync(
+            request.Id, currentUser, "Solo el propietario o un administrador pueden reasignar", cancellationToken);
 
         encuesta.Asignar(request.ResponsableId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
