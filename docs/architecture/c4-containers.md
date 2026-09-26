@@ -10,7 +10,7 @@ Complementa [domain-model.md](domain-model.md). Decisión de estilo: [ADR-001](a
 |---|---|---|
 | Aplicación Web | ✅ Parcial | Angular 22 (`frontend/`), standalone + signals. Pantallas: login (JWT pegado), inicio, crear encuesta, detalle y asignación. Faltan publicar, cerrar, responder y resultados |
 | Web API (.NET 10) | ✅ Parcial | Minimal APIs + MediatR 14 + FluentValidation 12 + JWT Bearer. Solo 3 endpoints (`POST`, `GET {id}`, `PUT {id}/assign`) bajo `/api/v1/Encuesta` |
-| SQL Server | 🟡 Modelo listo, sin migraciones | EF Core 10; tablas `Encuesta`, `Pregunta`, `OpcionPregunta`. Falta `dotnet ef migrations add`. No existen `Outbox` ni el índice único de respuestas |
+| SQL Server | ✅ Parcial | EF Core 10; tablas `Encuesta`, `Pregunta`, `OpcionPregunta` con migración `InitialCreate` (en Development se aplica al arrancar). No existen `Outbox` ni el índice único de respuestas |
 | Redis | 🟡 Solo registrado | `AddStackExchangeRedisCache` si hay cadena `ConnectionStrings:Redis`; si no, caché en memoria. Ningún caso de uso lo consume todavía |
 | Dapper (lecturas CQRS) | ❌ Planeado | Las consultas usan EF Core (`GetByIdAsync` con `Include`) |
 | Worker de fondo | ❌ Planeado | No existe el proyecto |

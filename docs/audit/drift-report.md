@@ -79,7 +79,7 @@ Se dejan como trabajo pendiente porque el encargo era actualizar la documentaci�
 1. Mensajes de validación de título/longitudes en español (alinear con Gherkin) o revisar el Gherkin.
 2. Endpoints y pantallas para publicar, cerrar, responder y resultados (HU-02 a HU-05); `RespuestaEncuesta`.
 3. Edición de borrador (`QuitarPregunta`) y `Duplicar`.
-4. Migraciones de EF Core, outbox y despacho de eventos de dominio.
+4. Outbox y despacho de eventos de dominio (la migración `InitialCreate` se añadió después de esta auditoría).
 5. Worker de cierre automático por plazo.
 6. Decidir si RF-01 exige ≥ 1 pregunta al crear o solo al publicar.
 7. Endpoint de eliminación para el administrador (RF-09).
