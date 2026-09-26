@@ -3,6 +3,7 @@ sequenceDiagram
     participant UI as Interfaz Web
     participant API as API Encuesta
     participant DB as Base de Datos
+    Note over UI,DB: PLANEADO - sin endpoint implementado (rutas orientativas)
     C->>UI: Publicar con fecha límite
     UI->>API: POST /encuestas/{id}/publicar
     API->>DB: Obtener encuesta y preguntas

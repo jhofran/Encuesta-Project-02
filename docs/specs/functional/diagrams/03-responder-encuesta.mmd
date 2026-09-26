@@ -3,6 +3,7 @@ sequenceDiagram
     participant UI as Interfaz Web
     participant API as API Encuesta
     participant DB as Base de Datos
+    Note over UI,DB: PLANEADO - sin endpoint implementado (rutas orientativas)
     P->>UI: Abre enlace de la encuesta
     UI->>API: GET /publico/{token}
     API->>DB: Buscar encuesta

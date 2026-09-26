@@ -1,0 +1,28 @@
+sequenceDiagram
+    actor C as Propietario / Admin
+    participant UI as Angular SPA
+    participant API as Web API (.NET 10)
+    participant D as Encuesta (dominio)
+    participant DB as SQL Server
+    C->>UI: Indica el nuevo responsable (GUID)
+    UI->>API: PUT /api/v1/Encuesta/{id}/assign
+    API->>DB: Cargar encuesta con preguntas
+    DB-->>API: Encuesta o nada
+    alt No existe
+        API-->>UI: 404 problem+json
+    else Usuario no es propietario ni admin
+        API-->>UI: 403 problem+json
+    else Autorizado
+        API->>D: Asignar(responsableId)
+        alt Encuesta Cerrada
+            D-->>API: DomainConflictException
+            API-->>UI: 409 problem+json
+        else Responsable vacío
+            D-->>API: DomainValidationException
+            API-->>UI: 422 problem+json
+        else OK
+            API->>DB: UPDATE CreadorId
+            API-->>UI: 200 EncuestaResponse
+            UI-->>C: Responsable actualizado
+        end
+    end

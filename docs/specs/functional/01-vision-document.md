@@ -116,3 +116,33 @@ El módulo **Encuesta** permite crear, publicar, responder y analizar encuestas 
 | HU-03 Responder encuesta | RF-04, RF-05, RN-03, RN-04, RN-06 | [diagrams/03-responder-encuesta.svg](diagrams/03-responder-encuesta.svg) |
 | HU-04 Cerrar encuesta | RF-06, RN-07 | [diagrams/04-cerrar-encuesta.svg](diagrams/04-cerrar-encuesta.svg) |
 | HU-05 Ver resultados | RF-07, RF-08 | [diagrams/05-ver-resultados.svg](diagrams/05-ver-resultados.svg) |
+| (contrato) Asignar responsable | — | [diagrams/06-asignar-encuesta.svg](diagrams/06-asignar-encuesta.svg) |
+
+## 11. Estado de implementación (auditoría 2026-09-26)
+
+Sincronizado con el código de `src/`, `tests/` y `frontend/`. Detalle y evidencias en [../../audit/drift-report.md](../../audit/drift-report.md).
+
+| Requisito | Estado | Observación |
+|-----------|--------|-------------|
+| RF-01 Crear encuesta con título, descripción y ≥ 1 pregunta | ✅ | API `POST /api/v1/Encuesta` + formulario Angular. La API acepta encuestas **sin** preguntas (el título es lo único obligatorio); la exigencia de ≥ 1 pregunta solo se aplica al publicar (RN-01) |
+| RF-02 Editar solo en borrador | 🟡 | El dominio bloquea cambios tras publicar; no existe endpoint de edición ni `QuitarPregunta` |
+| RF-03 Publicar y obtener enlace único | 🟡 | Solo dominio (`Publicar`, token de 32 hex); sin endpoint ni pantalla |
+| RF-04 Responder encuesta publicada y vigente | ❌ | Solo la regla `AceptaRespuestas`; no existe `RespuestaEncuesta` |
+| RF-05 Una respuesta por participante | ❌ | |
+| RF-06 Cierre manual y automático | 🟡 | Solo dominio (`Cerrar`, `CerrarSiVencida`); no hay endpoint ni worker |
+| RF-07 Resultados agregados | ❌ | |
+| RF-08 Exportar CSV | ❌ | |
+| RF-09 Administrador elimina encuestas | ❌ | El rol `admin` solo permite ver y reasignar encuestas ajenas |
+| (nuevo) Reasignar responsable | ✅ | `PUT /api/v1/Encuesta/{id}/assign`; no estaba en la visión original |
+
+| Regla | Estado |
+|-------|--------|
+| RN-01 ≥ 1 pregunta para publicar | 🟡 Dominio |
+| RN-02 Preguntas inmutables tras publicar | 🟡 Dominio |
+| RN-03 Respuestas solo en publicada y vigente | 🟡 Dominio (`AceptaRespuestas`) |
+| RN-04 Obligatorias respondidas | ❌ |
+| RN-05 Opciones ≥ 2 | ✅ API, dominio y formulario |
+| RN-06 Anonimato | ❌ (solo el indicador `esAnonima` al publicar) |
+| RN-07 Cerrada no reabre | 🟡 Dominio (no existe operación de reapertura; falta `Duplicar`) |
+
+Leyenda: ✅ implementado de extremo a extremo · 🟡 solo en el dominio · ❌ pendiente.

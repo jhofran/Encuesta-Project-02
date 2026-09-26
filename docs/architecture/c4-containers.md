@@ -2,6 +2,23 @@
 
 Complementa [domain-model.md](domain-model.md). Decisión de estilo: [ADR-001](adr/ADR-001-clean-architecture-cqrs.md).
 
+> **Sincronizado con el código el 2026-09-26** (auditoría: [drift-report.md](../audit/drift-report.md)). Los diagramas muestran la arquitectura **objetivo**; los elementos aún no construidos están marcados como *(planeado)*.
+
+## 0. Estado de implementación
+
+| Elemento | Estado | Detalle real |
+|---|---|---|
+| Aplicación Web | ✅ Parcial | Angular 22 (`frontend/`), standalone + signals. Pantallas: login (JWT pegado), inicio, crear encuesta, detalle y asignación. Faltan publicar, cerrar, responder y resultados |
+| Web API (.NET 10) | ✅ Parcial | Minimal APIs + MediatR 14 + FluentValidation 12 + JWT Bearer. Solo 3 endpoints (`POST`, `GET {id}`, `PUT {id}/assign`) bajo `/api/v1/Encuesta` |
+| SQL Server | 🟡 Modelo listo, sin migraciones | EF Core 10; tablas `Encuesta`, `Pregunta`, `OpcionPregunta`. Falta `dotnet ef migrations add`. No existen `Outbox` ni el índice único de respuestas |
+| Redis | 🟡 Solo registrado | `AddStackExchangeRedisCache` si hay cadena `ConnectionStrings:Redis`; si no, caché en memoria. Ningún caso de uso lo consume todavía |
+| Dapper (lecturas CQRS) | ❌ Planeado | Las consultas usan EF Core (`GetByIdAsync` con `Include`) |
+| Worker de fondo | ❌ Planeado | No existe el proyecto |
+| Outbox y despacho de eventos | ❌ Planeado | Los eventos se acumulan en memoria sin persistirse |
+| Rate limiting, OpenTelemetry, health checks | ❌ Planeado | |
+| Proveedor OIDC | ➖ Externo | `Authentication:Authority` apunta a un valor ficticio (`idp.encuesta.local`) |
+| Rutas públicas `/publico/{token}` | ❌ Planeado | Ver §6 |
+
 ## 1. Nivel 1 — Contexto del sistema
 
 ```mermaid
@@ -29,18 +46,18 @@ C4Container
     System_Ext(idp, "Proveedor OIDC", "Emite JWT")
 
     System_Boundary(sys, "Encuesta System") {
-        Container(web, "Aplicación Web", "SPA (responsive)", "Diseño de encuestas, formulario de respuesta y resultados")
-        Container(api, "Web API", ".NET 10 / ASP.NET Core", "Casos de uso CQRS, reglas de dominio, autenticación y autorización")
-        Container(worker, "Worker de Fondo", ".NET 10 Worker Service", "Outbox dispatcher, cierre automático por plazo, avisos por vencer")
-        ContainerDb(sql, "Base de datos", "SQL Server", "Fuente de verdad: encuestas, respuestas, outbox")
-        ContainerDb(redis, "Caché", "Redis", "Lectura pública de encuestas, resultados agregados, anti-duplicados y rate limiting")
+        Container(web, "Aplicación Web", "Angular 22 SPA (responsive)", "Diseño de encuestas, asignación; formulario de respuesta y resultados (planeado)")
+        Container(api, "Web API", ".NET 10 / ASP.NET Core", "Casos de uso CQRS (MediatR), reglas de dominio, JWT y autorización por propietario")
+        Container(worker, "Worker de Fondo (planeado)", ".NET 10 Worker Service", "Outbox dispatcher, cierre automático por plazo, avisos por vencer")
+        ContainerDb(sql, "Base de datos", "SQL Server", "Fuente de verdad: encuestas; respuestas y outbox (planeado)")
+        ContainerDb(redis, "Caché", "Redis", "Registrado sin uso aún; objetivo: lectura pública, resultados, anti-duplicados y rate limiting")
     }
 
     Rel(creador, web, "Usa", "HTTPS")
     Rel(participante, web, "Usa", "HTTPS")
     Rel(web, api, "Invoca", "JSON/HTTPS")
     Rel(api, idp, "Valida JWT", "OIDC")
-    Rel(api, sql, "Lee/escribe (EF Core / Dapper)", "TDS")
+    Rel(api, sql, "Lee/escribe (EF Core; Dapper planeado)", "TDS")
     Rel(api, redis, "Cache-aside, contadores", "RESP")
     Rel(worker, sql, "Lee outbox, cierra encuestas", "TDS")
     Rel(worker, redis, "Invalida claves", "RESP")
@@ -50,13 +67,15 @@ C4Container
 
 | Contenedor | Tecnología | Responsabilidad | Historias |
 |------------|-----------|-----------------|-----------|
-| Aplicación Web | SPA responsive | UI de creación, respuesta (móvil) y resultados | HU-01…05 |
-| **Web API** | **.NET 10**, ASP.NET Core Minimal APIs, MediatR/handlers propios | Comandos y consultas, validación, autorización por propietario, exportación CSV | HU-01…05 |
-| Worker de Fondo | .NET 10 Worker Service | Despachar outbox, `CerrarSiVencida`, emitir `EncuestaPorVencer` | HU-04 |
+| Aplicación Web | Angular 22 SPA responsive | UI de creación y asignación (implementado); respuesta (móvil) y resultados (planeado) | HU-01 (parcial) |
+| **Web API** | **.NET 10**, ASP.NET Core Minimal APIs, MediatR, FluentValidation | Comandos y consultas, validación, autorización por propietario/administrador; exportación CSV (planeado) | HU-01 (parcial) |
+| Worker de Fondo (planeado) | .NET 10 Worker Service | Despachar outbox, `CerrarSiVencida`, emitir `EncuestaPorVencer` | HU-04 |
 | **SQL Server** | SQL Server 2022+ | Persistencia transaccional; índice único `(EncuestaId, ParticipanteId)` para RF-05; tabla `Outbox` | Todas |
-| **Redis Cache** | Redis 7+ | Ver §4 | HU-03, HU-05 |
+| **Redis Cache** | Redis 7+ | Ver §4 (diseño objetivo; hoy solo registrado) | HU-03, HU-05 (planeado) |
 
 ## 4. Uso de Redis
+
+> Diseño objetivo. Hoy ningún caso de uso lee ni escribe estas claves.
 
 | Clave | Contenido | TTL / invalidación | Motivo |
 |-------|-----------|--------------------|--------|
@@ -84,9 +103,9 @@ flowchart LR
     end
     subgraph INF["Encuesta.Infrastructure"]
         EF[EF Core - Escritura]
-        DAP[Dapper - Lectura]
-        RC[Redis Cache]
-        OB[Outbox]
+        DAP[Dapper - Lectura, planeado]
+        RC[Redis Cache, registrado sin uso]
+        OB[Outbox, planeado]
     end
     EP --> CMD
     EP --> QRY
@@ -99,9 +118,9 @@ flowchart LR
     APP --> DOM
 ```
 
-Dependencias: `Api → Application → Domain`; `Infrastructure → Application/Domain`. El dominio no referencia nada externo.
+En el código actual `QRY` usa EF Core mediante `IEncuestaRepository` (no hay puertos de lectura separados). Dependencias: `Api → Application → Domain`; `Infrastructure → Application/Domain`. El dominio no referencia nada externo.
 
-## 6. Flujo clave: responder encuesta (HU-03)
+## 6. Flujo clave: responder encuesta (HU-03) — *planeado, no implementado*
 
 ```mermaid
 sequenceDiagram

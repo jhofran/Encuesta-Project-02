@@ -11,6 +11,21 @@ info:
 
     **Supuesto:** el dominio no define una operación "assign". Se interpreta como
     la reasignación del responsable (propietario) de la encuesta a otro creador.
+
+    **Estado de implementación (sincronizado con el código, 2026-09-26):**
+    solo existen los tres endpoints de este contrato. Publicar, cerrar, responder
+    y consultar resultados (HU-02 a HU-05) aún no tienen endpoint; las encuestas
+    creadas por esta API permanecen en `Borrador`.
+
+    **Autenticación:** JWT Bearer. El claim `sub` debe ser un GUID (identifica al
+    creador; si no lo es, la creación falla con 422 "El creador es obligatorio").
+    El claim `role` con valor `admin` otorga acceso a encuestas ajenas.
+
+    **Errores:** `application/problem+json`. Los errores de validación (422)
+    incluyen `errors`, cuyas claves son nombres de propiedad del comando en
+    PascalCase (p. ej. `Titulo`, `Preguntas[0].Opciones`). Los mensajes de
+    validación de campos los genera FluentValidation en inglés salvo
+    "Se requieren al menos 2 opciones"; los de reglas de dominio están en español.
   contact:
     name: Equipo de Arquitectura Encuesta
     email: arquitectura@encuesta.local
@@ -31,7 +46,11 @@ paths:
       tags:
         - Encuesta
       summary: Crear encuesta
-      description: Crea una encuesta en estado `Borrador` (HU-01).
+      description: |
+        Crea una encuesta en estado `Borrador` (HU-01). El título se recorta de
+        espacios; un título vacío o con solo espacios se rechaza. Las preguntas de
+        tipo `TextoLibre` y `Escala1a5` no admiten opciones (422). El creador es
+        el usuario autenticado (claim `sub`).
       operationId: createEncuesta
       requestBody:
         required: true
@@ -63,7 +82,10 @@ paths:
       tags:
         - Encuesta
       summary: Obtener encuesta
-      description: Devuelve la encuesta con sus preguntas, estado y `slaStatus`.
+      description: |
+        Devuelve la encuesta con sus preguntas, estado y `slaStatus`. Solo el
+        propietario o un administrador pueden consultarla (403 en otro caso).
+        Un `id` que no es GUID no coincide con la ruta y devuelve 404.
       operationId: getEncuestaById
       parameters:
         - $ref: '#/components/parameters/EncuestaId'
@@ -87,7 +109,8 @@ paths:
       summary: Asignar responsable
       description: |
         Reasigna la encuesta a otro creador. Solo el propietario actual o un
-        administrador pueden hacerlo. No aplica a encuestas `Cerrada` (RN-07).
+        administrador pueden hacerlo. No aplica a encuestas `Cerrada` (RN-07, 409).
+        Un `responsableId` vacío (GUID cero) se rechaza con 422.
       operationId: assignEncuesta
       parameters:
         - $ref: '#/components/parameters/EncuestaId'
@@ -114,6 +137,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 components:
   securitySchemes:
     bearerAuth:
@@ -131,7 +156,7 @@ components:
         format: uuid
   responses:
     BadRequest:
-      description: Solicitud mal formada.
+      description: Solicitud mal formada (JSON inválido, enum desconocido o GUID malformado en el cuerpo).
       content:
         application/problem+json:
           schema:
@@ -161,7 +186,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     UnprocessableEntity:
-      description: Reglas de negocio o validación incumplidas.
+      description: Reglas de negocio o validación de campos incumplidas (incluye `errors` por campo).
       content:
         application/problem+json:
           schema:
@@ -340,7 +365,13 @@ components:
         type:
           type: string
           format: uri-reference
-          description: URI que identifica el tipo de problema.
+          description: |
+            URI que identifica el tipo de problema. Las excepciones controladas por la
+            API usan `https://encuesta.local/problems/{slug}` con slug `validation-error`
+            (422), `business-rule-violation` (422), `conflict` (409), `not-found` (404),
+            `forbidden` (403), `bad-request` (400) o `internal-error` (500). Los 401 y
+            los 404 de enrutamiento los genera el framework y usan URIs de RFC 9110
+            (`https://tools.ietf.org/html/rfc9110#section-...`).
           example: https://encuesta.local/problems/validation-error
         title:
           type: string

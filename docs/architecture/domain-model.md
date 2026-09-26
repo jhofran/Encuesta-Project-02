@@ -2,7 +2,24 @@
 
 Deriva de [01-vision-document.md](../specs/functional/01-vision-document.md) (RF/RN) y [02-user-stories.md](../specs/functional/02-user-stories.md) (HU-01…HU-05).
 
-> **Supuesto:** las especificaciones no definen "SLAStatus" explícitamente. Se modela como el Value Object que expresa el **estado del plazo de respuesta** de la encuesta (fecha límite, RN-03 / HU-04 cierre automático). Ajustar si el término tiene otro significado de negocio.
+> **Supuesto:** las especificaciones no definen "SLAStatus" explícitamente. Se modela como el **estado del plazo de respuesta** de la encuesta (fecha límite, RN-03 / HU-04 cierre automático). En el código es un enum calculado por `Encuesta.EvaluarSla(ahora)`. Ajustar si el término tiene otro significado de negocio.
+
+> **Sincronizado con el código el 2026-09-26** (auditoría: [../audit/drift-report.md](../audit/drift-report.md)). Los diagramas de las secciones 3 a 5 reflejan lo **implementado** en `src/Encuesta.Domain`; lo pendiente figura en la sección 0.
+
+## 0. Estado de implementación
+
+| Elemento del diseño | Estado | Nota |
+|---|---|---|
+| Agregado `Encuesta` (`Crear`, `AgregarPregunta`, `Publicar`, `Cerrar`, `CerrarSiVencida`, `AceptaRespuestas`, `EvaluarSla`) | ✅ Implementado | 37 pruebas unitarias en verde |
+| `Asignar(nuevoResponsableId)` | ✅ Implementado | No estaba en el diseño original; nace del contrato `PUT /assign` |
+| `SLAStatus` | ✅ Implementado | Enum calculado, no persistido |
+| `Pregunta`, `OpcionPregunta`, `MotivoCierre` | ✅ Implementado | |
+| Eventos `EncuestaCreada`, `PreguntaAgregada`, `EncuestaPublicada`, `EncuestaCerrada` | 🟡 Se generan, no se despachan | No hay outbox ni manejadores; `ClearDomainEvents` no se invoca |
+| Eventos `EncuestaPorVencer`, `RespuestaRegistrada` | ❌ Pendiente | |
+| `QuitarPregunta`, `Duplicar` | ❌ Pendiente | Necesarios para HU-01 (editar) y HU-04 (reabrir → duplicar) |
+| `RespuestaEncuesta` / `ItemRespuesta` | ❌ Pendiente | HU-03 |
+| `PlazoRespuesta`, `TokenPublico` (Value Objects) | ➖ Simplificado | En el código son `DateTimeOffset? FechaLimite` y `string Token` (32 hex) |
+| Reloj inyectable | ➖ Difiere | Se usa `TimeProvider` de .NET, no `IClock` |
 
 ## 1. Lenguaje ubicuo
 
@@ -33,16 +50,17 @@ classDiagram
         +EstadoEncuesta Estado
         +bool EsAnonima
         +bool RespuestaUnica
-        +TokenPublico Token
-        +PlazoRespuesta Plazo
-        +Crear(titulo, descripcion, creadorId)$ Encuesta
-        +AgregarPregunta(texto, tipo, obligatoria, opciones)
-        +QuitarPregunta(preguntaId)
+        +string? Token
+        +DateTimeOffset? FechaLimite
+        +DateTimeOffset CreadaEn
+        +Crear(creadorId, titulo, descripcion, ahora)$ Encuesta
+        +AgregarPregunta(texto, tipo, esObligatoria, opciones, ahora) Pregunta
         +Publicar(fechaLimite, esAnonima, respuestaUnica, ahora)
         +Cerrar(ahora)
-        +CerrarSiVencida(ahora)
+        +CerrarSiVencida(ahora) bool
         +AceptaRespuestas(ahora) bool
-        +Duplicar() Encuesta
+        +Asignar(nuevoResponsableId)
+        +EvaluarSla(ahora) SLAStatus
     }
     class Pregunta {
         <<Entity>>
@@ -58,21 +76,12 @@ classDiagram
         +string Texto
         +int Orden
     }
-    class PlazoRespuesta {
-        <<Value Object>>
-        +DateTimeOffset FechaLimite
-        +Evaluar(ahora) SLAStatus
-    }
     class SLAStatus {
-        <<Value Object / Enum>>
+        <<Enumeration (calculado)>>
         SinPlazo
         Vigente
         PorVencer
         Vencido
-    }
-    class TokenPublico {
-        <<Value Object>>
-        +string Valor
     }
     class EstadoEncuesta {
         <<Enumeration>>
@@ -88,7 +97,7 @@ classDiagram
         Escala1a5
     }
     class RespuestaEncuesta {
-        <<Aggregate Root>>
+        <<Aggregate Root — PENDIENTE (HU-03)>>
         +RespuestaId Id
         +EncuestaId EncuestaId
         +Guid? ParticipanteId
@@ -103,11 +112,9 @@ classDiagram
 
     Encuesta "1" *-- "1..*" Pregunta : contiene
     Pregunta "1" *-- "0..*" OpcionPregunta : ofrece
-    Encuesta *-- PlazoRespuesta
-    Encuesta *-- TokenPublico
     Encuesta --> EstadoEncuesta
     Pregunta --> TipoPregunta
-    PlazoRespuesta ..> SLAStatus : produce
+    Encuesta ..> SLAStatus : EvaluarSla
     RespuestaEncuesta "1" *-- "1..*" ItemRespuesta
     RespuestaEncuesta ..> Encuesta : referencia por Id
 ```
@@ -120,13 +127,13 @@ classDiagram
 | Opción única/múltiple con ≥ 2 opciones | RN-05 | `AgregarPregunta` |
 | Publicar requiere ≥ 1 pregunta | RN-01 | `Publicar` |
 | Fecha límite futura | HU-02 | `Publicar` |
-| Preguntas inmutables tras publicar | RN-02 | `AgregarPregunta`/`QuitarPregunta` exigen `Borrador` |
+| Preguntas inmutables tras publicar | RN-02 | `AgregarPregunta` exige `Borrador` (`QuitarPregunta` pendiente) |
 | Solo cerrar si `Publicada` | HU-04 | `Cerrar` |
-| Cerrada no reabre; se duplica | RN-07 | Sin operación de reapertura; `Duplicar()` |
+| Cerrada no reabre; se duplica | RN-07 | Sin operación de reapertura (implementado); `Duplicar()` pendiente |
 | Acepta respuestas solo si `Publicada` y plazo no vencido | RN-03 | `AceptaRespuestas` |
-| Obligatorias respondidas | RN-04 | `RespuestaEncuesta.Registrar` |
-| Anónima ⇒ sin `ParticipanteId` | RN-06 | `RespuestaEncuesta.Registrar` |
-| Una respuesta por participante (si `RespuestaUnica`) | RF-05 | Servicio de dominio + índice único en BD |
+| Obligatorias respondidas | RN-04 | `RespuestaEncuesta.Registrar` (pendiente) |
+| Anónima ⇒ sin `ParticipanteId` | RN-06 | `RespuestaEncuesta.Registrar` (pendiente) |
+| Una respuesta por participante (si `RespuestaUnica`) | RF-05 | Servicio de dominio + índice único en BD (pendiente) |
 
 ### 3.2 Ciclo de vida
 
@@ -140,14 +147,15 @@ stateDiagram-v2
     Cerrada --> [*]
     note right of Cerrada
         Terminal (RN-07).
-        Para reutilizar: Duplicar()
-        crea nueva Encuesta en Borrador.
+        Sin operación de reapertura.
+        Duplicar() (nueva Encuesta en Borrador)
+        está pendiente de implementar.
     end note
 ```
 
 ## 4. `SLAStatus` (estado del plazo)
 
-Se calcula, **no se persiste** como fuente de verdad: es función de `FechaLimite` y la hora actual (inyectada vía `IClock` para pruebas deterministas).
+Se calcula, **no se persiste** como fuente de verdad: es función de `FechaLimite` y la hora actual (inyectada vía `TimeProvider` de .NET para pruebas deterministas; en las pruebas se usa un proveedor fijo).
 
 | Valor | Condición | Efecto |
 |-------|-----------|--------|
@@ -169,7 +177,7 @@ stateDiagram-v2
 
 ## 5. Eventos de dominio (`DomainEvents`)
 
-Se emiten desde el agregado, se recogen al confirmar la transacción (patrón *outbox*) y se publican a los manejadores.
+Se emiten desde el agregado (`AggregateRoot.Raise`). **Diseño objetivo:** se recogen al confirmar la transacción (patrón *outbox*) y se publican a los manejadores. **Estado actual:** los eventos se acumulan en memoria en `DomainEvents` y no se persisten ni se despachan (no existe outbox, despachador ni manejadores); `EncuestaPorVencer` y `RespuestaRegistrada` no están implementados. El flujo 5.1 describe el diseño objetivo.
 
 ```mermaid
 classDiagram

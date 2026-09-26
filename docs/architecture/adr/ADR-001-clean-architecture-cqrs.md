@@ -70,3 +70,12 @@ Adoptar **Clean Architecture con CQRS** (mismo proceso y misma base de datos; si
 ## Referencias
 - Requisitos: RN-01…RN-07, OB-04 en [01-vision-document.md](../../specs/functional/01-vision-document.md)
 - Historias: HU-01…HU-05 en [02-user-stories.md](../../specs/functional/02-user-stories.md)
+
+## Estado de implementación (auditoría 2026-09-26)
+
+La decisión se aplica: solución `Domain ← Application ← Infrastructure/Api`, dominio rico (`Encuesta` con invariantes y eventos), comandos y consultas con MediatR y un `ValidationBehavior` (FluentValidation). Matices respecto al texto de este ADR:
+
+- **CQRS ligero:** hoy comandos y consultas usan el mismo modelo EF Core (`IEncuestaRepository`); las lecturas con Dapper/proyecciones y la caché Redis siguen **planeadas**.
+- **Outbox:** no implementado; los eventos de dominio se acumulan en memoria sin despacharse.
+- **Pruebas de arquitectura (NetArchTest):** no implementadas; la dirección de dependencias solo la garantizan las referencias de proyecto.
+- **MediatR 14** requiere licencia comercial según el tamaño de la organización (`MediatR:LicenseKey`); no estaba contemplado al redactar el ADR. Si es un problema, los handlers propios son la alternativa.

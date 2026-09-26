@@ -1,17 +1,31 @@
 sequenceDiagram
     actor C as Creador
-    participant UI as Interfaz Web
-    participant API as API Encuesta
-    participant DB as Base de Datos
+    participant UI as Angular SPA
+    participant API as Web API (.NET 10)
+    participant V as ValidationBehavior
+    participant D as Encuesta (dominio)
+    participant DB as SQL Server
     C->>UI: Completa título y preguntas
-    UI->>API: POST /encuestas
-    API->>API: Validar título y opciones (RN-05)
-    alt Datos inválidos
-        API-->>UI: 422 errores de validación
-        UI-->>C: Muestra errores
-    else Datos válidos
-        API->>DB: Insertar encuesta (estado Borrador)
-        DB-->>API: encuestaId
-        API-->>UI: 201 Created
-        UI-->>C: Confirmación
+    UI->>API: POST /api/v1/Encuesta (Bearer JWT)
+    alt Sin token válido
+        API-->>UI: 401 problem+json
+    else Autenticado
+        API->>V: CreateEncuestaCommand
+        V->>V: FluentValidation (título, longitudes, RN-05)
+        alt Validación falla
+            V-->>API: ValidationException
+            API-->>UI: 422 problem+json (errors por campo)
+            UI-->>C: Muestra errores
+        else Válido
+            V->>D: Crear + AgregarPregunta por cada pregunta
+            alt Regla de dominio incumplida
+                D-->>API: DomainValidationException
+                API-->>UI: 422 problem+json
+            else OK
+                API->>DB: INSERT Encuesta, Pregunta, OpcionPregunta (estado Borrador)
+                DB-->>API: OK
+                API-->>UI: 201 Created + Location + EncuestaResponse
+                UI-->>C: Navega al detalle de la encuesta
+            end
+        end
     end

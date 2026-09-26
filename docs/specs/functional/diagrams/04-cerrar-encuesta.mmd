@@ -4,6 +4,7 @@ sequenceDiagram
     participant API as API Encuesta
     participant DB as Base de Datos
     participant S as Planificador
+    Note over UI,DB: PLANEADO - sin endpoint implementado (rutas orientativas)
     C->>UI: Cerrar encuesta
     UI->>API: POST /encuestas/{id}/cerrar
     API->>DB: Obtener estado
