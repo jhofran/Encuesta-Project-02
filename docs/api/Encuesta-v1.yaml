@@ -1,0 +1,371 @@
+openapi: 3.0.3
+info:
+  title: Encuesta System API
+  version: 1.0.0
+  description: |
+    API REST del módulo Encuesta. Basada en el modelo de dominio
+    (`docs/architecture/domain-model.md`): agregado `Encuesta` con ciclo de vida
+    `Borrador → Publicada → Cerrada` y `SLAStatus` calculado a partir del plazo.
+
+    Los errores siguen RFC 7807 (`application/problem+json`).
+
+    **Supuesto:** el dominio no define una operación "assign". Se interpreta como
+    la reasignación del responsable (propietario) de la encuesta a otro creador.
+  contact:
+    name: Equipo de Arquitectura Encuesta
+    email: arquitectura@encuesta.local
+  license:
+    name: Proprietary
+    url: https://encuesta.local/license
+servers:
+  - url: https://api.encuesta.local
+    description: Servidor de referencia
+tags:
+  - name: Encuesta
+    description: Gestión de encuestas
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/Encuesta:
+    post:
+      tags:
+        - Encuesta
+      summary: Crear encuesta
+      description: Crea una encuesta en estado `Borrador` (HU-01).
+      operationId: createEncuesta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEncuestaRequest'
+      responses:
+        '201':
+          description: Encuesta creada.
+          headers:
+            Location:
+              description: URL del recurso creado.
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncuestaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /api/v1/Encuesta/{id}:
+    get:
+      tags:
+        - Encuesta
+      summary: Obtener encuesta
+      description: Devuelve la encuesta con sus preguntas, estado y `slaStatus`.
+      operationId: getEncuestaById
+      parameters:
+        - $ref: '#/components/parameters/EncuestaId'
+      responses:
+        '200':
+          description: Encuesta encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncuestaResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/Encuesta/{id}/assign:
+    put:
+      tags:
+        - Encuesta
+      summary: Asignar responsable
+      description: |
+        Reasigna la encuesta a otro creador. Solo el propietario actual o un
+        administrador pueden hacerlo. No aplica a encuestas `Cerrada` (RN-07).
+      operationId: assignEncuesta
+      parameters:
+        - $ref: '#/components/parameters/EncuestaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignEncuestaRequest'
+      responses:
+        '200':
+          description: Responsable actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncuestaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    EncuestaId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la encuesta.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Solicitud mal formada.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Token ausente o inválido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Sin permiso sobre la encuesta.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: La encuesta no existe.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Estado de la encuesta incompatible con la operación.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Reglas de negocio o validación incumplidas.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    TipoPregunta:
+      type: string
+      description: Tipo de pregunta.
+      enum:
+        - OpcionUnica
+        - OpcionMultiple
+        - TextoLibre
+        - Escala1a5
+    EstadoEncuesta:
+      type: string
+      description: Estado del ciclo de vida.
+      enum:
+        - Borrador
+        - Publicada
+        - Cerrada
+    SLAStatus:
+      type: string
+      description: Estado del plazo de respuesta, calculado (no persistido).
+      enum:
+        - SinPlazo
+        - Vigente
+        - PorVencer
+        - Vencido
+    CreatePreguntaRequest:
+      type: object
+      required:
+        - texto
+        - tipo
+      properties:
+        texto:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: ¿Cómo calificas el servicio?
+        tipo:
+          $ref: '#/components/schemas/TipoPregunta'
+        esObligatoria:
+          type: boolean
+          default: false
+        opciones:
+          type: array
+          description: Obligatorio con al menos 2 elementos para OpcionUnica y OpcionMultiple (RN-05).
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+    CreateEncuestaRequest:
+      type: object
+      required:
+        - titulo
+      properties:
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Satisfacción del cliente
+        descripcion:
+          type: string
+          maxLength: 2000
+        preguntas:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/CreatePreguntaRequest'
+    AssignEncuestaRequest:
+      type: object
+      required:
+        - responsableId
+      properties:
+        responsableId:
+          type: string
+          format: uuid
+          description: Identificador del nuevo creador responsable.
+    OpcionResponse:
+      type: object
+      required:
+        - id
+        - texto
+        - orden
+      properties:
+        id:
+          type: string
+          format: uuid
+        texto:
+          type: string
+        orden:
+          type: integer
+          minimum: 0
+    PreguntaResponse:
+      type: object
+      required:
+        - id
+        - texto
+        - tipo
+        - esObligatoria
+        - orden
+      properties:
+        id:
+          type: string
+          format: uuid
+        texto:
+          type: string
+        tipo:
+          $ref: '#/components/schemas/TipoPregunta'
+        esObligatoria:
+          type: boolean
+        orden:
+          type: integer
+          minimum: 0
+        opciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpcionResponse'
+    EncuestaResponse:
+      type: object
+      required:
+        - id
+        - creadorId
+        - titulo
+        - estado
+        - slaStatus
+        - esAnonima
+        - respuestaUnica
+        - preguntas
+        - creadaEn
+      properties:
+        id:
+          type: string
+          format: uuid
+        creadorId:
+          type: string
+          format: uuid
+          description: Responsable actual de la encuesta.
+        titulo:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        estado:
+          $ref: '#/components/schemas/EstadoEncuesta'
+        slaStatus:
+          $ref: '#/components/schemas/SLAStatus'
+        esAnonima:
+          type: boolean
+        respuestaUnica:
+          type: boolean
+        token:
+          type: string
+          nullable: true
+          description: Token público; solo presente cuando la encuesta está publicada.
+        fechaLimite:
+          type: string
+          format: date-time
+          nullable: true
+        preguntas:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreguntaResponse'
+        creadaEn:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      description: Detalle de problema según RFC 7807.
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: URI que identifica el tipo de problema.
+          example: https://encuesta.local/problems/validation-error
+        title:
+          type: string
+          description: Resumen breve del problema.
+          example: Error de validación
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          example: 422
+        detail:
+          type: string
+          description: Explicación específica de esta ocurrencia.
+          example: Se requieren al menos 2 opciones
+        instance:
+          type: string
+          format: uri-reference
+          description: URI de esta ocurrencia.
+        traceId:
+          type: string
+          description: Identificador de correlación.
+        errors:
+          type: object
+          description: Errores por campo.
+          additionalProperties:
+            type: array
+            items:
+              type: string

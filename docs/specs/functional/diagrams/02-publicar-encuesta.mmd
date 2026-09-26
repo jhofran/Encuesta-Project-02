@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor C as Creador
+    participant UI as Interfaz Web
+    participant API as API Encuesta
+    participant DB as Base de Datos
+    C->>UI: Publicar con fecha límite
+    UI->>API: POST /encuestas/{id}/publicar
+    API->>DB: Obtener encuesta y preguntas
+    DB-->>API: Encuesta
+    alt Sin preguntas o fecha pasada (RN-01)
+        API-->>UI: 422 error
+        UI-->>C: Muestra error
+    else Válida
+        API->>DB: Estado = Publicada, generar enlace único
+        DB-->>API: OK
+        API-->>UI: 200 enlace
+        UI-->>C: Muestra enlace para compartir
+    end

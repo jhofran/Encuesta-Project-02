@@ -1,0 +1,78 @@
+<a routerLink="/" class="back">← Volver</a>
+
+@if (loading()) {
+  <p class="muted" role="status">Cargando…</p>
+} @else if (error(); as e) {
+  <app-error-alert [error]="e" />
+} @else if (encuesta(); as enc) {
+  <section class="card">
+    <div class="row spread">
+      <h1>{{ enc.titulo }}</h1>
+      <span [class]="'badge estado-' + enc.estado.toLowerCase()">{{ enc.estado }}</span>
+    </div>
+    @if (enc.descripcion) {
+      <p>{{ enc.descripcion }}</p>
+    }
+
+    <dl class="meta">
+      <div><dt>Plazo</dt><dd><span [class]="'badge sla-' + enc.slaStatus.toLowerCase()">{{ slaLabel(enc.slaStatus) }}</span></dd></div>
+      <div><dt>Fecha límite</dt><dd>{{ enc.fechaLimite ? (enc.fechaLimite | date: 'medium') : '—' }}</dd></div>
+      <div><dt>Anónima</dt><dd>{{ enc.esAnonima ? 'Sí' : 'No' }}</dd></div>
+      <div><dt>Respuesta única</dt><dd>{{ enc.respuestaUnica ? 'Sí' : 'No' }}</dd></div>
+      <div><dt>Responsable</dt><dd class="mono">{{ enc.creadorId }}</dd></div>
+      <div><dt>Creada</dt><dd>{{ enc.creadaEn | date: 'medium' }}</dd></div>
+      @if (enc.token) {
+        <div><dt>Enlace público</dt><dd class="mono">/e/{{ enc.token }}</dd></div>
+      }
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Preguntas ({{ enc.preguntas.length }})</h2>
+    @if (enc.preguntas.length === 0) {
+      <p class="muted">Aún no hay preguntas.</p>
+    }
+    <ol class="preguntas">
+      @for (p of enc.preguntas; track p.id) {
+        <li>
+          <strong>{{ p.texto }}</strong>
+          <span class="muted"> · {{ tipoLabel(p.tipo) }}@if (p.esObligatoria) { · obligatoria }</span>
+          @if (p.opciones?.length) {
+            <ul>
+              @for (o of p.opciones; track o.id) {
+                <li>{{ o.texto }}</li>
+              }
+            </ul>
+          }
+        </li>
+      }
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Asignar responsable</h2>
+    @if (esCerrada()) {
+      <p class="muted">Una encuesta cerrada no puede reasignarse.</p>
+    } @else {
+      <form (ngSubmit)="assign()" novalidate>
+        <label for="responsable">Identificador del nuevo responsable (GUID)</label>
+        <div class="row">
+          <input id="responsable" type="text" class="grow" [formControl]="responsable" />
+          @if (miId()) {
+            <button type="button" class="btn" (click)="asignarAMi()">Yo</button>
+          }
+          <button type="submit" class="btn btn-primary" [disabled]="assigning()">
+            {{ assigning() ? 'Asignando…' : 'Asignar' }}
+          </button>
+        </div>
+        @if (responsable.touched && responsable.invalid) {
+          <p class="field-error" role="alert">Ingresa un GUID válido.</p>
+        }
+        @if (assigned()) {
+          <p class="alert alert-ok" role="status">Responsable actualizado.</p>
+        }
+        <app-error-alert [error]="assignError()" />
+      </form>
+    }
+  </section>
+}

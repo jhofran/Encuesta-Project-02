@@ -1,0 +1,84 @@
+<section class="card">
+  <h1>Nueva encuesta</h1>
+  <p class="muted">Se guarda en estado <strong>Borrador</strong>.</p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <label for="titulo">Título</label>
+    <input id="titulo" type="text" formControlName="titulo" [attr.maxlength]="limites.titulo" />
+    @if (form.controls.titulo.touched && form.controls.titulo.hasError('required')) {
+      <p class="field-error" role="alert">El título es obligatorio</p>
+    }
+
+    <label for="descripcion">Descripción (opcional)</label>
+    <textarea id="descripcion" rows="3" formControlName="descripcion"
+      [attr.maxlength]="limites.descripcion"></textarea>
+
+    <div class="row spread">
+      <h2>Preguntas ({{ preguntas.length }})</h2>
+      <button type="button" class="btn" (click)="addPregunta()"
+        [disabled]="preguntas.length >= limites.preguntas">Agregar pregunta</button>
+    </div>
+
+    @for (pregunta of preguntas.controls; track pregunta; let i = $index) {
+      <fieldset class="pregunta" [formGroup]="pregunta">
+        <legend>Pregunta {{ i + 1 }}</legend>
+
+        <label [for]="'texto-' + i">Texto</label>
+        <input [id]="'texto-' + i" type="text" formControlName="texto"
+          [attr.maxlength]="limites.textoPregunta" />
+        @if (pregunta.controls.texto.touched && pregunta.controls.texto.hasError('required')) {
+          <p class="field-error" role="alert">El texto de la pregunta es obligatorio</p>
+        }
+
+        <div class="row">
+          <div class="grow">
+            <label [for]="'tipo-' + i">Tipo</label>
+            <select [id]="'tipo-' + i" formControlName="tipo" (change)="onTipoChange(pregunta)">
+              @for (tipo of tipos; track tipo.value) {
+                <option [value]="tipo.value">{{ tipo.label }}</option>
+              }
+            </select>
+          </div>
+          <label class="check">
+            <input type="checkbox" formControlName="esObligatoria" /> Obligatoria
+          </label>
+        </div>
+
+        @if (conOpciones(pregunta.controls.tipo.value)) {
+          <div class="opciones">
+            <div class="row spread">
+              <span>Opciones</span>
+              <button type="button" class="btn btn-small" (click)="addOpcion(pregunta)"
+                [disabled]="opcionesDe(pregunta).length >= limites.opciones">Agregar opción</button>
+            </div>
+            @for (opcion of opcionesDe(pregunta).controls; track opcion; let j = $index) {
+              <div class="row">
+                <input type="text" class="grow" [formControl]="opcion"
+                  [attr.aria-label]="'Opción ' + (j + 1) + ' de la pregunta ' + (i + 1)"
+                  [attr.maxlength]="limites.textoOpcion" />
+                <button type="button" class="btn btn-small" (click)="removeOpcion(pregunta, j)"
+                  [attr.aria-label]="'Quitar opción ' + (j + 1)">Quitar</button>
+              </div>
+            }
+            @if (pregunta.hasError('opcionesMinimas')) {
+              <p class="field-error" role="alert">Se requieren al menos {{ limites.minOpciones }} opciones</p>
+            }
+          </div>
+        }
+
+        <button type="button" class="btn btn-small btn-danger" (click)="removePregunta(i)">
+          Quitar pregunta
+        </button>
+      </fieldset>
+    }
+
+    <app-error-alert [error]="error()" />
+
+    <div class="row">
+      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        {{ saving() ? 'Guardando…' : 'Guardar encuesta' }}
+      </button>
+      <a routerLink="/" class="btn">Cancelar</a>
+    </div>
+  </form>
+</section>

@@ -1,0 +1,35 @@
+sequenceDiagram
+    actor P as Participante
+    participant UI as Interfaz Web
+    participant API as API Encuesta
+    participant DB as Base de Datos
+    P->>UI: Abre enlace de la encuesta
+    UI->>API: GET /publico/{token}
+    API->>DB: Buscar encuesta
+    DB-->>API: Encuesta o nada
+    alt No existe
+        API-->>UI: 404
+        UI-->>P: Encuesta no encontrada
+    else Cerrada o vencida (RN-03)
+        API-->>UI: 410 Gone
+        UI-->>P: Ya no acepta respuestas
+    else Vigente
+        API-->>UI: 200 preguntas
+        UI-->>P: Muestra formulario
+        P->>UI: Responde y envía
+        UI->>API: POST /publico/{token}/respuestas
+        API->>API: Validar obligatorias (RN-04)
+        API->>DB: Verificar respuesta previa (RF-05)
+        alt Faltan obligatorias
+            API-->>UI: 422
+            UI-->>P: Responde las obligatorias
+        else Ya respondió
+            API-->>UI: 409 Conflict
+            UI-->>P: Ya has respondido
+        else Válida
+            API->>DB: Guardar respuesta (sin identidad si anónima, RN-06)
+            DB-->>API: OK
+            API-->>UI: 201
+            UI-->>P: Gracias por participar
+        end
+    end

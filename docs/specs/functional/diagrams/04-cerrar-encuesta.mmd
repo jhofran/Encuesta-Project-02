@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor C as Creador
+    participant UI as Interfaz Web
+    participant API as API Encuesta
+    participant DB as Base de Datos
+    participant S as Planificador
+    C->>UI: Cerrar encuesta
+    UI->>API: POST /encuestas/{id}/cerrar
+    API->>DB: Obtener estado
+    DB-->>API: Estado actual
+    alt Estado distinto de Publicada
+        API-->>UI: 409 error
+        UI-->>C: Solo se cierran encuestas publicadas
+    else Publicada
+        API->>DB: Estado = Cerrada
+        API-->>UI: 200
+        UI-->>C: Encuesta cerrada
+    end
+    Note over S,DB: Cierre automático por fecha límite
+    S->>DB: Buscar Publicadas con fecha vencida
+    DB-->>S: Lista de encuestas
+    S->>DB: Estado = Cerrada

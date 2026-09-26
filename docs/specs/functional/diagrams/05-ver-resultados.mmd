@@ -1,0 +1,25 @@
+sequenceDiagram
+    actor U as Creador / Analista
+    participant UI as Interfaz Web
+    participant API as API Encuesta
+    participant DB as Base de Datos
+    U->>UI: Abre resultados
+    UI->>API: GET /encuestas/{id}/resultados
+    API->>API: Verificar permiso
+    alt Sin permiso
+        API-->>UI: 403
+        UI-->>U: No tienes permiso
+    else Con permiso
+        API->>DB: Agregar respuestas por pregunta
+        DB-->>API: Conteos y promedios
+        API-->>UI: 200 resultados
+        UI-->>U: Muestra totales y gráficos
+        opt Exportar
+            U->>UI: Exportar CSV
+            UI->>API: GET /encuestas/{id}/resultados.csv
+            API->>DB: Leer respuestas
+            DB-->>API: Filas
+            API-->>UI: archivo CSV
+            UI-->>U: Descarga
+        end
+    end
